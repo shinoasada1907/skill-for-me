@@ -1,0 +1,13 @@
+# Build output (only appears if you build a generated project inside the repo)
+[Bb]in/
+[Oo]bj/
+.vs/
+*.suo
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+
+# NOTE: *.user is intentionally NOT ignored — the bundled template ships a
+# TemplateAddOnDotNetCore.csproj.user as an asset that must be tracked.

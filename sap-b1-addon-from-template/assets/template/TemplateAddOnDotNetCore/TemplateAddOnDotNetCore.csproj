@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TemplateAddOnDotNetCore.Common\TemplateAddOnDotNetCore.Common.csproj" />
+    <ProjectReference Include="..\TemplateAddOnDotNetCore.DAL\TemplateAddOnDotNetCore.DAL.csproj" />
+    <ProjectReference Include="..\TemplateAddOnDotNetCore.BLL\TemplateAddOnDotNetCore.BLL.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="SAPBusinessOneSDK">
+      <HintPath>C:\Program Files (x86)\SAP\SAP Business One SDK\Lib\SAPBusinessOneSDK.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+  <!-- TODO: Add SAP Business One UI API SDK reference
+  <ItemGroup>
+    <Reference Include="SAPBusinessOneSDK">
+      <HintPath>C:\Program Files (x86)\SAP\SAP Business One SDK\Lib\SAPBusinessOneSDK.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  -->
+
+</Project>

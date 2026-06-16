@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="TemplateAddOnDotNetCore.Common/TemplateAddOnDotNetCore.Common.csproj" />
+  <Project Path="TemplateAddOnDotNetCore.DAL/TemplateAddOnDotNetCore.DAL.csproj" />
+  <Project Path="TemplateAddOnDotNetCore.BLL/TemplateAddOnDotNetCore.BLL.csproj" />
+  <Project Path="TemplateAddOnDotNetCore/TemplateAddOnDotNetCore.csproj" />
+</Solution>

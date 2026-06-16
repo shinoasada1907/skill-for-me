@@ -19,8 +19,8 @@ Copy the skill folders into your personal Claude Code skills directory:
 - **macOS / Linux:** `~/.claude/skills/`
 
 ```powershell
-git clone https://github.com/<your-user>/claude-sap-b1-addon-skills.git
-Copy-Item .\claude-sap-b1-addon-skills\sap-b1-addon-* "$env:USERPROFILE\.claude\skills\" -Recurse
+git clone https://github.com/shinoasada1907/skill-for-me.git
+Copy-Item .\skill-for-me\sap-b1-addon-* "$env:USERPROFILE\.claude\skills\" -Recurse
 ```
 
 Restart Claude Code (skills load at session start).

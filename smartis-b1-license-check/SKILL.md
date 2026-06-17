@@ -70,7 +70,9 @@ Enforce:   CheckLicense(formId) → TryLoadLicense (hash check) → ValidateAddo
 - `ReadLicenseFromFile(path)` — `.smlc` → encrypted reader, else `ExtractLicenseInfo`.
 - `ComputeSHA256Short(input, 16)` — integrity hash over the **full** stored key (incl. Trial suffix).
 - `TryLoadLicense(out data, out licenseKey, out msg)` — read latest `S0SADC` row, recompute
-  `SHKEY` and compare (integrity), `Split(':')`, `ParseLicenseKeyToInfo(licenseKey[0])`.
+  `SHKEY` and compare (integrity), `Split(':')`, then parse the key. **Always pass the AES
+  password:** `ParseLicenseKeyToInfo(licenseKey[0], AesLicenseEncryption.DefaultPassword)` — see
+  the AES-key gotcha below.
 - `CheckLicense(formId, out msg)` — full enforcement (cached per form per day).
 - `ValidateImportedLicense(data, licenseKey[], out msg)` — register-time validation (in-memory).
 - `RegisterLicense(data, installKey, out msg)` — `ResolveLicenseDates` → `SHKEY=ComputeSHA256Short(installKey)`
@@ -138,11 +140,58 @@ After a successful registration `INSTALLKEY` is non-null. Before registering a T
 
 ## Enforcement wiring
 
-Call `LicenseHelper.CheckLicense(formId, out msg)` and block when it returns false:
-- **Menu click** (`Menu.cs` / `SBO_Application_MenuEvent`, `pVal.BeforeAction`): set `BubbleEvent=false`.
-- **Form open** / **startup** (`InitialSetting` / `GeneralSettings`).
-`CheckLicense` honors `REQ=N` (form not license-required) and caches per form per day.
+Call `LicenseHelper.CheckLicense(formId, out msg)` and block when it returns false. The
+`formId` is the form's **TypeEx** (e.g. `"SMCSUNIT"`), matched against the license FUNCTIONS
+table — `CheckLicense` honors `REQ=N` (form not license-required) and caches per form per day.
+
+**Per-form menu check (canonical pattern).** Wrap every licensed menu in one helper, called from
+`SBO_Application_MenuEvent` while `pVal.BeforeAction` — so the form only opens if the license
+covers it. The License/About menu itself is NOT gated.
+
+```csharp
+private void OpenLicensedForm(string formId, string statusMessage, Action openForm)
+{
+    if (LicenseHelper.CheckLicense(formId, out string message))
+    {
+        Application.SBO_Application.SetStatusBarMessage(statusMessage, SAPbouiCOM.BoMessageTime.bmt_Short, false);
+        openForm();
+        return;
+    }
+    if (!string.IsNullOrEmpty(message))
+        Application.SBO_Application.MessageBox(message);   // invalid/expired -> form not opened
+}
+
+// inside SBO_Application_MenuEvent: if (pVal.BeforeAction) switch (pVal.MenuUID) { ... }
+case Configuration.UnitMenuUid:
+    OpenLicensedForm("SMCSUNIT", "Opening Consolidation Unit...", () => new ConUnit().Show());
+    break;
+```
+
+Map every add-on menu UID that opens a business form to that form's TypeEx. Forms the license
+marks `REQ=N` pass automatically. For a hard block at startup, also call `CheckLicense` in
+`InitialSetting` / `GeneralSettings`.
 > Common gap: `CheckLicense` is defined but never called — verify enforcement is actually wired.
+> Note: enforcement re-parses the stored INSTALLKEY — make sure that parse passes the AES
+> password (gotcha below), otherwise `CheckLicense` fails for every form.
+
+## AES-key parse gotcha (read-back)
+
+License files (`.txt`) usually carry an **AES-encrypted** LKEY (a long Base64 with `+/=`, NOT the
+plain `eyJ...` Base64-JSON). `ExtractLicenseInfo` decrypts it automatically when importing, so
+registration works. But the read-back paths (`TryLoadLicense` for enforcement, the About form)
+re-parse the **stored** LKEY with `reader.ParseLicenseKeyToInfo(lkey)` — and that overload tries
+plain Base64, then DPAPI, and only tries AES **if an `aesPassword` is given**. With no password an
+AES key fails with *"Failed to parse license key to license info"*.
+
+Fix every read-back call to pass the default password (safe for plain keys too — plain Base64 is
+tried first and returns before AES):
+```csharp
+var data = reader.ParseLicenseKeyToInfo(licenseKey[0], AesLicenseEncryption.DefaultPassword);
+```
+`AesLicenseEncryption` / `DefaultPassword` are public in `SmartisLicenseLibrary`. Independently,
+the About form should prefer the persisted `CUSTOMERNAME` + `ENDDATE` columns and treat the key
+parse as best-effort, so the display never depends on the parse succeeding. Persist `CUSTOMERNAME`
+at registration (`UpdateAddonLicense`) or the About line shows "Non License".
 
 ## Gotchas / checklist
 

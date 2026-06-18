@@ -69,10 +69,15 @@ Enforce:   CheckLicense(formId) → TryLoadLicense (hash check) → ValidateAddo
 
 - `ReadLicenseFromFile(path)` — `.smlc` → encrypted reader, else `ExtractLicenseInfo`.
 - `ComputeSHA256Short(input, 16)` — integrity hash over the **full** stored key (incl. Trial suffix).
-- `TryLoadLicense(out data, out licenseKey, out msg)` — read latest `S0SADC` row, recompute
-  `SHKEY` and compare (integrity), `Split(':')`, then parse the key. **Always pass the AES
+- `TryLoadLicense(out data, out licenseKey, out msg)` — **first call `EnsureAddonInfoLoaded()`**
+  (enforcement can fire from a direct menu click before the License form ran, so `AddOnVersionModel`
+  may be null → the query keys on nulls → "No license found"). Then read latest `S0SADC` row,
+  recompute `SHKEY` and compare (integrity), `Split(':')`, then parse the key. **Always pass the AES
   password:** `ParseLicenseKeyToInfo(licenseKey[0], AesLicenseEncryption.DefaultPassword)` — see
   the AES-key gotcha below.
+- `EnsureAddonInfoLoaded()` — populate `AddOnVersionModel` (Name/Version/Partner) from
+  `S2InvGetAddonInfo` if empty. Make it a shared `LicenseHelper` method (not only a form method),
+  so both the License form AND enforcement can call it.
 - `CheckLicense(formId, out msg)` — full enforcement (cached per form per day).
 - `ValidateImportedLicense(data, licenseKey[], out msg)` — register-time validation (in-memory).
 - `RegisterLicense(data, installKey, out msg)` — `ResolveLicenseDates` → `SHKEY=ComputeSHA256Short(installKey)`
@@ -193,12 +198,31 @@ the About form should prefer the persisted `CUSTOMERNAME` + `ENDDATE` columns an
 parse as best-effort, so the display never depends on the parse succeeding. Persist `CUSTOMERNAME`
 at registration (`UpdateAddonLicense`) or the About line shows "Non License".
 
+**Register-vs-enforce parse mismatch (important).** Registration validates the `SmartisLicenseInfo`
+from `ReadLicenseFromFile`→`ExtractLicenseInfo` (a FILE parse). For an AES-encrypted LKEY that path
+decrypts via **DPAPI**, fails, and leaves `LicenseData = null` → so `data.Addon` is **empty** and
+`ValidateAddonName` (guarded by `if (!IsNullOrEmpty(data.Addon))`) is a **no-op** → a wrong-addon
+license registers "successfully", then enforcement (which parses the key with the AES password and
+DOES see `Addon`) blocks every form. Fix: in `ValidateImportedLicense`, when `data.Addon` is empty,
+re-parse `licenseKey[0]` with `AesLicenseEncryption.DefaultPassword` and validate the name against
+that — so register rejects the wrong addon up front, consistent with enforcement. (The same
+file-vs-key split means register reads DB/InstallNo/Identifier from the file headers while enforce
+reads them from the LKEY JSON — keep the license file headers and LKEY contents in sync.)
+
 ## Gotchas / checklist
 
 - [ ] `S0SADC` schema updated in **both** SQLSERVER + HANADB scripts **and** `setup.json` base64.
 - [ ] `INSTALLKEY` is `NVARCHAR(MAX)` / `NCLOB`; `SHKEY` fits 16-hex.
+- [ ] When reading `INSTALLKEY` back, **`CAST(INSTALLKEY AS NVARCHAR(4000))`** in the SELECT — the
+      SAP DI API Recordset truncates an NVARCHAR(MAX) column on read (regardless of column position,
+      so reordering does NOT fix it), giving `hash(read) != SHKEY` → "Hash mismatch" in enforcement
+      and a failed license parse. Casting to a bounded type makes DI read the full value. 4000 fits
+      any license key. (Note: the About form can still look OK via the CUSTOMERNAME/ENDDATE columns
+      even when its key parse silently fails — don't treat a correct About line as proof the key read
+      is intact.)
 - [ ] Addon-info store filters `INSTCOMPNY = DB_NAME()` and matches the `.ard` add-on name.
-- [ ] `AddOnVersionModel` populated before any query that keys on it.
+- [ ] `AddOnVersionModel` populated before any query that keys on it — `TryLoadLicense` must call
+      `EnsureAddonInfoLoaded()` itself (menu-click enforcement runs before the License form).
 - [ ] Trial dates use fixed `yyyyMMdd` (culture-safe).
 - [ ] `SHKEY` computed over the **full** `installKey` on both write (RegisterLicense) and read (TryLoadLicense).
 - [ ] Don't leak provider/customer secrets; the SboGuiApi connection string stays the captured hex.
